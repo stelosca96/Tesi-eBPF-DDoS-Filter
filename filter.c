@@ -19,6 +19,10 @@ BPF_HISTOGRAM(syn_counter_by_src, u64);
 BPF_HISTOGRAM(fin_counter_by_src, u64);
 BPF_HISTOGRAM(rst_counter_by_src, u64);
 
+// name, key size, value size, table size
+// scegliere un valore ragionevole per la dimensione della tabella
+BPF_HASH(blacklist_table, u64, bool, 10240);
+
 static u64 get_map_key(u32 src_ip, u32 dst_ip, u16 dst_port){
     u64 value = dst_ip;
     value += ((u64) (src_ip & 0xFFFF0000) << 16);
@@ -51,6 +55,10 @@ int filter(struct xdp_md *ctx) {
             u64 key = get_map_key(ip->saddr, ip->daddr, tcp->dest);
             syn_counter_by_src.increment(key);
             bpf_trace_printk("syn packet: %lx %lx\n", tcp->dest, key);
+            if(blacklist_table.lookup(&key)!=NULL){
+                bpf_trace_printk("blacklist\n");
+                return XDP_DROP;
+            }
           }
           else if (tcp->fin) {
             fin_counter_by_dst.increment(ip->daddr);
