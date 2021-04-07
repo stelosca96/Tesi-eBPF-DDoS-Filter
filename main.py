@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from bcc import BPF
-import time
-from bcc.table import HashTable, Array
+from bcc.table import HashTable
 from bcc import BPF
 import time
 from ipaddress import IPv4Address
@@ -24,7 +23,7 @@ fin_src: HashTable = b.get_table("fin_counter_by_src")
 rst_src: HashTable = b.get_table("rst_counter_by_src")
 
 blacklist_table: HashTable = b.get_table("blacklist_table")
-blacklist_table[c_ulong(0x500002640464a8c0)] = c_bool(True)
+# blacklist_table[c_ulong(0x500002640464a8c0)] = c_bool(True)
 try:
     # b.trace_print()
     while True:
@@ -52,6 +51,7 @@ try:
             # todo: scegliere una soglia
             if syn_count > 10 and syn_count/(syn_count+fin_count+rst_count) > 0.6:
                 blacklist.add(f"{src_ip} => {dst_ip}:{dst_port}")
+                blacklist_table[k] = c_bool(True)
         print(len(syn_dst.items()))
         print(len(syn_src.items()))
         print(blacklist)
