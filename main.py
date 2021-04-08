@@ -8,12 +8,45 @@ from socket import ntohl, ntohs
 from ctypes import c_ulong, c_bool
 import os
 
+
+# conto i syn già considerati anomali,
+# così da escluderli nel conto generale
+def add_anomaly(ip, port, syn, fin):
+    global anomaly_by_ip_port
+    key = f"{ip}:{port}"
+    if key in anomaly_by_ip_port.keys():
+        anomaly_by_ip_port[key]['syn_count'] += syn
+        anomaly_by_ip_port[key]['fin_count'] += fin
+    else:
+        anomaly_by_ip_port[key] = {
+            'syn_count': syn,
+            'fin_count': fin
+        }
+
+
+def clear_maps():
+    syn_dst.clear()
+    fin_dst.clear()
+    syn_src.clear()
+    fin_src.clear()
+    rst_src.clear()
+    blacklist.clear()
+    anomaly_by_ip_port.clear()
+
+
+def get_anomaly_syn_fin(ip, port):
+    key = f"{ip}:{port}"
+    if key in anomaly_by_ip_port.keys():
+        return anomaly_by_ip_port[key]['syn_count'],  anomaly_by_ip_port[key]['fin_count']
+    return 0, 0
+
+
 device = "enp0s3"
 b = BPF(src_file="filter.c")
 fn = b.load_func("filter", BPF.XDP)
 b.attach_xdp(device, fn, 0)
 
-
+anomaly_by_ip_port = dict()
 blacklist = set()
 
 syn_dst: HashTable = b.get_table("syn_counter_by_dst")
@@ -23,23 +56,14 @@ fin_src: HashTable = b.get_table("fin_counter_by_src")
 rst_src: HashTable = b.get_table("rst_counter_by_src")
 
 blacklist_table: HashTable = b.get_table("blacklist_table")
-# blacklist_table[c_ulong(0x500002640464a8c0)] = c_bool(True)
 try:
     # b.trace_print()
     while True:
         print('get data')
         os.system('clear')
-
-        for k, v in syn_dst.items():
-            fin_count = fin_dst.get(k)
-            # print(fin_count)
-            print("dest ip: %15s, syn_count: %3d, fin_count: %3d" %
-                  (IPv4Address(ntohl(k.value)), v.value,
-                   fin_count.value if fin_count is not None else 0))
+        blacklist_table.clear()
 
         for k, v in syn_src.items():
-            print(type(k))
-            print(type(v))
             syn_count = v.value
             fin_count = fin_src.get(k).value if fin_src.get(k) is not None else 0
             rst_count = rst_src.get(k).value if rst_src.get(k) is not None else 0
@@ -49,14 +73,35 @@ try:
             print("dest ip: %15s:%4d, src ip: %3s, syn_count: %3d, fin_count: %3d, rst_count: %3d" %
                   (dst_ip, dst_port, src_ip, syn_count, fin_count, rst_count))
             # todo: scegliere una soglia
-            if syn_count > 10 and syn_count/(syn_count+fin_count+rst_count) > 0.6:
-                blacklist.add(f"{src_ip} => {dst_ip}:{dst_port}")
+            if syn_count > 10 and syn_count/(syn_count+fin_count+rst_count) > 0.7:
+                blacklist.add(f"{src_ip} =>a {dst_ip}:{dst_port}")
                 blacklist_table[k] = c_bool(True)
+                add_anomaly(dst_ip, dst_port, syn_count, fin_count+rst_count)
+
+        for k, v in syn_dst.items():
+            syn_count = v.value
+            fin_count = fin_dst.get(k).value if fin_dst.get(k) is not None else 0
+            dst_port = ntohs((k.value & 0xFFFF000000000000) >> 48)
+            dst_ip = IPv4Address(ntohl((k.value & 0xFFFFFFFF)))
+            # print(fin_count)
+            print("dest ip: %15s:%4d, syn_count: %3d, fin_count: %3d" %
+                  (dst_ip, dst_port, syn_count, fin_count))
+            # sottraggo i syn e i fin già considerati un'anomalia
+            s, f = get_anomaly_syn_fin(dst_ip, dst_port)
+            syn_count -= s
+            fin_count -= f
+            if syn_count > 10 and syn_count / (syn_count + fin_count) > 0.7:
+                blacklist.add(f"{dst_ip}:{dst_port}")
+                blacklist_table[k] = c_bool(True)
+                print("new: dest ip: %15s:%4d, syn_count: %3d, fin_count: %3d" %
+                      (dst_ip, dst_port, syn_count, fin_count))
+
         print(len(syn_dst.items()))
         print(len(syn_src.items()))
         print(blacklist)
+        clear_maps()
         # todo: pulire mappe
-        time.sleep(10)
+        time.sleep(20)
 except KeyboardInterrupt:
     pass
 b.remove_xdp(device, 0)
