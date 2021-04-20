@@ -12,8 +12,7 @@ from ctypes import c_ulong, c_bool
 from db import Db
 import os
 
-features = ['syn_tx', 'rst_tx', 'fin_tx', 'udp_tx',
-            'icmp_tx', 'tcp_tx', 'packet_rate_tx']
+features = ['syn_tx', 'rst_tx', 'fin_tx', 'udp_tx', 'icmp_tx', 'tcp_tx', 'packet_rate_tx']
 # class CounterData(ctypes.Structure):
 #     _fields_ = [
 #         ("syn_tx", ctypes.c_uint),

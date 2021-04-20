@@ -69,7 +69,7 @@ int filter(struct xdp_md *ctx) {
             packet_rate_tx_counter_by_src.increment(key);
             tcp_tx_counter_by_src.increment(key);
             if (tcp->syn) {
-                bpf_trace_printk("syn packet: %lx %lx\n", tcp->dest, key);
+//                bpf_trace_printk("syn packet: %lx %lx\n", tcp->dest, key);
                 syn_tx_counter_by_src.increment(key);
                 // sea una delle due chiavi è presente nella blacklist faccio il drop del pacchetto
                 // le blacklist sono riempite dall'interfaccia in python ogni x secondi
@@ -79,11 +79,11 @@ int filter(struct xdp_md *ctx) {
 //                }
             }
             else if (tcp->fin) {
-                bpf_trace_printk("fin packet\n");
+//                bpf_trace_printk("fin packet\n");
                 fin_tx_counter_by_src.increment(key);
             }
             else if (tcp->rst){
-                bpf_trace_printk("rst packet\n");
+//                bpf_trace_printk("rst packet\n");
                 rst_tx_counter_by_src.increment(key);
             }
         }
