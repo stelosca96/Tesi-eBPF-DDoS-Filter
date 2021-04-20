@@ -6,6 +6,7 @@ import time
 from ipaddress import IPv4Address
 from socket import ntohl, ntohs
 from ctypes import c_ulong, c_bool
+from db import Db
 import os
 
 
@@ -54,13 +55,12 @@ fin_dst: HashTable = b.get_table("fin_counter_by_dst")
 syn_src: HashTable = b.get_table("syn_counter_by_src")
 fin_src: HashTable = b.get_table("fin_counter_by_src")
 rst_src: HashTable = b.get_table("rst_counter_by_src")
-
+db = Db('root', 'ciao12345', 'anomaly_detection', '192.168.1.20')
 blacklist_table: HashTable = b.get_table("blacklist_table")
 try:
     # b.trace_print()
     while True:
         print('get data')
-        os.system('clear')
         blacklist_table.clear()
 
         for k, v in syn_src.items():
@@ -70,6 +70,15 @@ try:
             dst_port = ntohs((k.value & 0xFFFF000000000000) >> 48)
             dst_ip = IPv4Address(ntohl((k.value & 0xFFFFFFFF)))
             src_ip = IPv4Address(ntohl((k.value & 0xFFFF00000000) >> 16))
+            data = {
+                'ip_src': ntohl((k.value & 0xFFFF00000000) >> 16),
+                'ip_dst': ntohl((k.value & 0xFFFFFFFF)),
+                'port_dst': ntohs((k.value & 0xFFFF000000000000) >> 48),
+                'syn_tx': syn_count,
+                'rst_tx': rst_count,
+                'fin_tx': fin_count,
+            }
+            db.add_data(data)
             print("dest ip: %15s:%4d, src ip: %3s, syn_count: %3d, fin_count: %3d, rst_count: %3d" %
                   (dst_ip, dst_port, src_ip, syn_count, fin_count, rst_count))
             # todo: scegliere una soglia
