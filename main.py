@@ -12,7 +12,8 @@ from ctypes import c_ulong, c_bool
 from db import Db
 import os
 
-features = ['syn_tx', 'rst_tx', 'fin_tx', 'udp_tx', 'icmp_tx', 'tcp_tx', 'packet_rate_tx']
+features = ['syn_tx', 'rst_tx', 'fin_tx', 'udp_tx', 'icmp_tx', 'tcp_tx',
+            'packet_rate_tx', 'udp_tx_53', 'throughput_tx']
 # class CounterData(ctypes.Structure):
 #     _fields_ = [
 #         ("syn_tx", ctypes.c_uint),
@@ -57,7 +58,7 @@ def get_anomaly_syn_fin(ip, port):
     return 0, 0
 
 
-device = "enp0s3"
+device = "wlan0"
 b = BPF(src_file="counter.c")
 fn = b.load_func("filter", BPF.XDP)
 b.attach_xdp(device, fn, 0)
@@ -74,7 +75,7 @@ for feature in features:
     print(key)
     tables[feature]: HashTable = b.get_table(key)
 
-db = Db('ste_tgr', 'root', 'ciao12345', 'anomaly_detection', '192.168.1.55')
+db = Db('ste_tgr', 'root', 'ciao12345', 'anomaly_detection', '192.168.1.55', 3307)
 blacklist_table: HashTable = b.get_table("blacklist_table")
 
 try:
@@ -82,6 +83,8 @@ try:
     while True:
         print('get data')
         blacklist_table.clear()
+        # for k, v in tables['throughput_tx'].items():
+        #     print('throughput_tx', k.value, v.value)
         for k, v in tables['packet_rate_tx'].items():
             data = dict()
             data['packet_rate_tx'] = v.value
@@ -94,14 +97,17 @@ try:
             })
 
             db.add_data(data)
-            print("dest ip: %15s:%4d, src ip: %3s, syn_count: %3d, fin_count: %3d, rst_count: %3d" %
-                  (
+            print("dest ip: %15s:%4d, src ip: %3s, syn_count: %3d, fin_count: %3d, rst_count: %3d throughput_tx: %d %d"
+                  % (
                       IPv4Address(data["ip_dst"]),
                       data["port_dst"],
                       IPv4Address(data["ip_src"]),
                       data["syn_tx"],
                       data["fin_tx"],
-                      data["rst_tx"])
+                      data["rst_tx"],
+                      data["throughput_tx"],
+                      ntohs(data["throughput_tx"])
+                  )
                   )
             # todo: scegliere una soglia
             # if syn_count > 10 and syn_count/(syn_count+fin_count+rst_count) > 0.7:

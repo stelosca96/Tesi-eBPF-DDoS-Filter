@@ -1,4 +1,4 @@
-#define KBUILD_MODNAME "filter"
+//#define KBUILD_MODNAME "filter"
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
@@ -25,10 +25,11 @@ BPF_HISTOGRAM(syn_tx_counter_by_src, u64, 1024);
 BPF_HISTOGRAM(rst_tx_counter_by_src, u64, 1024);
 BPF_HISTOGRAM(fin_tx_counter_by_src, u64, 1024);
 BPF_HISTOGRAM(udp_tx_counter_by_src, u64, 1024);
+BPF_HISTOGRAM(udp_tx_53_counter_by_src, u64, 1024);
 BPF_HISTOGRAM(icmp_tx_counter_by_src, u64, 1024);
 BPF_HISTOGRAM(tcp_tx_counter_by_src, u64, 1024);
 BPF_HISTOGRAM(packet_rate_tx_counter_by_src, u64, 1024);
-//BPF_HISTOGRAM(throughput_tx_counter_by_src, u64, 1024);
+BPF_HASH(throughput_tx_counter_by_src, u64, u64, 1024);
 
 // name, key size, value size, table size
 // scegliere un valore ragionevole per la dimensione della tabella
@@ -41,26 +42,48 @@ static u64 get_map_key(u32 src_ip, u32 dst_ip, u16 dst_port){
     return value;
 };
 
+static bool check_mask(u32 mask, u32 ip){
+    return false;
+};
+
+static void add_throughput(u64 key, u64 value) {
+    u64 *val;
+    val = throughput_tx_counter_by_src.lookup_or_try_init(&key, &value);
+    if (val) {
+        (*val) += value;
+    }
+};
 
 int filter(struct xdp_md *ctx) {
 //  bpf_trace_printk("ddos filter\n");
   void *data = (void *)(long)ctx->data;
   void *data_end = (void *)(long)ctx->data_end;
   struct ethhdr *eth = data;
+
   if ((void*)eth + sizeof(*eth) <= data_end) {
     struct iphdr *ip = data + sizeof(*eth);
     if ((void*)ip + sizeof(*ip) <= data_end) {
+        if(check_mask(ip->saddr, ip->saddr))
+            return XDP_PASS;
       if (ip->protocol == IPPROTO_UDP) {
         struct udphdr *udp = (void*)ip + sizeof(*ip);
         if ((void*)udp + sizeof(*udp) <= data_end) {
             u64 key = get_map_key(ip->saddr, ip->daddr, udp->dest);
             packet_rate_tx_counter_by_src.increment(key);
             udp_tx_counter_by_src.increment(key);
-//          if (udp->dest == ntohs(7999)) {
-//            // bpf_trace_printk("udp port 7999\n");
+            add_throughput(key, ip->tot_len);
+          if (udp->dest == ntohs(53)) {
+            udp_tx_53_counter_by_src.increment(key);
+            // bpf_trace_printk("udp port 7999\n");
 //            udp->dest = ntohs(7998);
-//          }
+          }
         }
+      }
+      if (ip->protocol == IPPROTO_ICMP) {
+        u64 key = get_map_key(ip->saddr, ip->daddr, 0);
+        packet_rate_tx_counter_by_src.increment(key);
+        icmp_tx_counter_by_src.increment(key);
+        add_throughput(key, ip->tot_len);
       }
       if (ip->protocol == IPPROTO_TCP){
         struct tcphdr *tcp = (void*)ip + sizeof(*ip);
@@ -68,6 +91,7 @@ int filter(struct xdp_md *ctx) {
             u64 key = get_map_key(ip->saddr, ip->daddr, tcp->dest);
             packet_rate_tx_counter_by_src.increment(key);
             tcp_tx_counter_by_src.increment(key);
+            add_throughput(key, ip->tot_len);
             if (tcp->syn) {
 //                bpf_trace_printk("syn packet: %lx %lx\n", tcp->dest, key);
                 syn_tx_counter_by_src.increment(key);

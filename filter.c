@@ -1,4 +1,4 @@
-#define KBUILD_MODNAME "filter"
+//#define KBUILD_MODNAME "filter"
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
