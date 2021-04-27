@@ -74,7 +74,7 @@ for feature in features:
     print(key)
     tables[feature]: HashTable = b.get_table(key)
 
-db = Db('root', 'ciao12345', 'anomaly_detection', '192.168.1.20')
+db = Db('ste_tgr', 'root', 'ciao12345', 'anomaly_detection', '192.168.1.55')
 blacklist_table: HashTable = b.get_table("blacklist_table")
 
 try:

@@ -2,17 +2,18 @@ import mariadb
 
 
 class Db:
-    def __init__(self, user, password, database, host):
+    def __init__(self, hostname, user, password, database, host):
         self.connection = mariadb.connect(user=user, password=password, database=database, host=host)
-
+        self.hostname = hostname
         self.cursor = self.connection.cursor()
 
     def add_data(self, data: dict):
         try:
-            query = "insert into flows (ip_src, ip_dst, port_dst, syn_tx, rst_tx," \
+            query = "insert into flows (hostname, ip_src, ip_dst, port_dst, syn_tx, rst_tx," \
                     " fin_tx, udp_tx, icmp_tx, tcp_tx, packet_rate_tx)" \
-                    " values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
+                    " values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
             data = (
+                self.hostname,
                 data['ip_src'],
                 data['ip_dst'],
                 data['port_dst'],
